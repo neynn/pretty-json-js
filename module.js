@@ -1,4 +1,5 @@
 export const PrettyJSON = function(spacing) {
+    this.depth = 0;
     this.spacing = spacing;
     this.jsonString = "";
     this.writes = 0;
@@ -53,6 +54,7 @@ PrettyJSON.prototype.getJoinString = function(depth) {
 
 PrettyJSON.prototype.open = function(depth = 0, name) {
     this.pad(depth);
+    this.depth = depth + 1;
 
     if(name) {
         this.jsonString += `"${name}": {\n`;
@@ -63,67 +65,38 @@ PrettyJSON.prototype.open = function(depth = 0, name) {
     return this;
 }
 
-PrettyJSON.prototype.close = function(depth = 0) {
+PrettyJSON.prototype.close = function() {
     while(this.openLists.length !== 0) {
         this.closeList();
     }
 
-    this.newEmptyLine(depth);
+    this.depth--;
+    this.newEmptyLine(this.depth);
     this.jsonString += "}";
 
     return this;
 }
 
-PrettyJSON.prototype.writeLine = function(id, depth, data) {
-    this.newLine(depth);
-    this.jsonString += `"${id}": ${JSON.stringify(data)}`;
-
-    if(this.openLists.length === 0) {
-        this.writes++;
-    } else {
-        const list = this.openLists[this.openLists.length - 1];
-        list.writes++;
-    }
-
-    return this;
-}
-
-PrettyJSON.prototype.openList = function(id, depth, type) {
-    if(type === undefined) {
-        type = PrettyJSON.LIST_TYPE.OBJECT;
-    }
+PrettyJSON.prototype.openList = function(id, type = PrettyJSON.LIST_TYPE.OBJECT) {
+    this.newLine(this.depth);
 
     switch(type) {
         case PrettyJSON.LIST_TYPE.OBJECT: {
-            this.newLine(depth);
             this.jsonString += `"${id}": {\n`;
             break;
         }
         case PrettyJSON.LIST_TYPE.ARRAY: {
-            this.newLine(depth);
             this.jsonString += `"${id}": [\n`;
             break;
         }
     }
 
+    this.depth++;
+
     this.openLists.push({
         "type": type,
-        "depth": depth,
         "writes": 0
     });
-
-    return this;
-}
-
-PrettyJSON.prototype.writeList = function(id, depth, jsonStrings, type) {
-    const nestedDepth = depth + 1;
-    const joinString = this.getJoinString(nestedDepth);
-    const joined = jsonStrings.join(joinString);
-
-    this.openList(id, depth, type);
-    this.pad(nestedDepth);
-    this.jsonString += joined;
-    this.closeList();
 
     return this;
 }
@@ -134,16 +107,17 @@ PrettyJSON.prototype.closeList = function() {
     }
 
     const list = this.openLists.pop();
-    const { depth, type } = list;
+    const { type } = list;
+
+    this.depth--;
+    this.newEmptyLine(this.depth);
 
     switch(type) {
         case PrettyJSON.LIST_TYPE.OBJECT: {
-            this.newEmptyLine(depth);
             this.jsonString += "}";
             break;
         }
         case PrettyJSON.LIST_TYPE.ARRAY: {
-            this.newEmptyLine(depth);
             this.jsonString += "]";
             break;
         }
@@ -159,6 +133,33 @@ PrettyJSON.prototype.closeList = function() {
     return this;
 }
 
+PrettyJSON.prototype.writeLine = function(id, data) {
+    this.newLine(this.depth);
+    this.jsonString += `"${id}": ${JSON.stringify(data)}`;
+
+    if(this.openLists.length === 0) {
+        this.writes++;
+    } else {
+        const list = this.openLists[this.openLists.length - 1];
+        list.writes++;
+    }
+
+    return this;
+}
+
+PrettyJSON.prototype.writeList = function(id, jsonStrings, type) {
+    this.openList(id, type);
+    this.pad(this.depth);
+
+    const joinString = this.getJoinString(this.depth);
+    const joined = jsonStrings.join(joinString);
+
+    this.jsonString += joined;
+    this.closeList();
+
+    return this;
+}
+
 PrettyJSON.prototype.build = function() {
     return this.jsonString;
 }
@@ -167,6 +168,7 @@ PrettyJSON.prototype.reset = function() {
     this.openLists = [];
     this.jsonString = "";
     this.writes = 0;
+    this.depth = 0;
 
     return this;
 }
